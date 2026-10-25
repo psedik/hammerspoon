@@ -1,3 +1,4 @@
+#include <limits.h>
 #import <Cocoa/Cocoa.h>
 #import <Carbon/Carbon.h>
 #import <LuaSkin/LuaSkin.h>
@@ -986,7 +987,7 @@ id _getMenuStructure(AXUIElementRef menuItem) {
         [attributeValues replaceObjectAtIndex:modifiersIndex withObject:modsDst];
 
         // Get the children of this item, if any
-        if (AXUIElementCopyAttributeValues(menuItem, kAXChildrenAttribute, 0, MAX_INT, &cfChildren) == kAXErrorSuccess) {
+        if (AXUIElementCopyAttributeValues(menuItem, kAXChildrenAttribute, 0, INT_MAX, &cfChildren) == kAXErrorSuccess) {
             children = [[NSMutableArray alloc] init];
             CFIndex numChildren = CFArrayGetCount(cfChildren);
 
