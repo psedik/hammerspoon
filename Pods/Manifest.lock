@@ -31,7 +31,7 @@ DEPENDENCIES:
   - Sparkle (= 2.6.4)
 
 SPEC REPOS:
-  https://github.com/CocoaPods/Specs.git:
+  trunk:
     - ASCIImage
     - CocoaAsyncSocket
     - CocoaLumberjack

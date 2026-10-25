@@ -3,7 +3,7 @@ platform :osx, '13.0'
 
 inhibit_all_warnings!
 
-source 'https://github.com/CocoaPods/Specs.git'
+source 'https://cdn.cocoapods.org/'
 
 project 'Hammerspoon', 'Profile' => :debug
 
