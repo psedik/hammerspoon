@@ -1,0 +1,78 @@
+name: Personal arm64 build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prepare dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The fork initially contains no tags. The version script needs this tag.
+          git fetch https://github.com/Hammerspoon/hammerspoon.git refs/tags/1.1.1:refs/tags/1.1.1
+          xcodebuild -version
+          brew install cocoapods
+          /usr/bin/python3 -m pip install --user -r requirements.txt
+          # Preserve locked dependencies while removing Sparkle from generated projects.
+          pod install
+
+      - name: Build Release
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          xcodebuild -workspace Hammerspoon.xcworkspace \
+            -scheme Release -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath build/personal \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+            CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
+            ENABLE_HARDENED_RUNTIME=YES GCC_OPTIMIZATION_LEVEL=s \
+            build > artifacts/build.log 2>&1
+
+      - name: Verify and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          app=build/personal/Build/Products/Release/Hammerspoon.app
+          test -d "$app"
+          updater_files=$(find "$app" \( -iname '*sparkle*' -o -name '*.xpc' \))
+          if [ -n "$updater_files" ]; then
+            echo 'Unexpected updater component in app bundle' >&2
+            exit 1
+          fi
+          linkage=$(otool -L "$app/Contents/MacOS/Hammerspoon")
+          if grep -qi Sparkle <<< "$linkage"; then
+            echo 'Unexpected Sparkle linkage' >&2
+            exit 1
+          fi
+          test "$(lipo -archs "$app/Contents/MacOS/Hammerspoon")" = arm64
+          codesign --verify --deep --strict --verbose=2 "$app"
+          signature=$(codesign -dv "$app" 2>&1)
+          grep -q 'flags=.*runtime' <<< "$signature"
+          grep -q 'Signature=adhoc' <<< "$signature"
+          codesign -d --entitlements :- "$app" > artifacts/entitlements.plist
+          git rev-parse HEAD > artifacts/revision.txt
+          xcodebuild -version > artifacts/toolchain.txt
+          ditto -c -k --sequesterRsrc --keepParent "$app" artifacts/Hammerspoon-arm64.zip
+          shasum -a 256 artifacts/Hammerspoon-arm64.zip > artifacts/SHA256SUMS
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: Hammerspoon-arm64-${{ github.run_number }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14
