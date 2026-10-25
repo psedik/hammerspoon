@@ -28,6 +28,9 @@ jobs:
           # Preserve locked dependencies while removing Sparkle from generated projects.
           pod install
 
+      - name: Test Lua runtime and native exceptions
+        run: /usr/bin/python3 scripts/test_lua_runtime.py
+
       - name: Build Release
         shell: bash
         run: |
@@ -39,7 +42,8 @@ jobs:
             -derivedDataPath build/personal \
             ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
             CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
-            ENABLE_HARDENED_RUNTIME=YES GCC_OPTIMIZATION_LEVEL=s \
+            ENABLE_HARDENED_RUNTIME=YES CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
+            GCC_OPTIMIZATION_LEVEL=s \
             build > artifacts/build.log 2>&1
 
       - name: Verify and package
@@ -64,6 +68,8 @@ jobs:
           grep -q 'flags=.*runtime' <<< "$signature"
           grep -q 'Signature=adhoc' <<< "$signature"
           codesign -d --entitlements :- "$app" > artifacts/entitlements.plist
+          /usr/bin/python3 -c 'import plistlib; p = plistlib.load(open("artifacts/entitlements.plist", "rb")); assert not p.get("com.apple.security.get-task-allow", False), "Debugger entitlement enabled"'
+          cp Podfile.lock artifacts/Podfile.lock
           git rev-parse HEAD > artifacts/revision.txt
           xcodebuild -version > artifacts/toolchain.txt
           ditto -c -k --sequesterRsrc --keepParent "$app" artifacts/Hammerspoon-arm64.zip
